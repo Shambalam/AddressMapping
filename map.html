@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Optimized Route with Directions</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKInKMvHT2oWj5d0XlwrZKBga27MJ7cn8&libraries=places"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+
+        #container {
+            display: flex;
+        }
+    </style>
+</head>
+<body onload="initMap()">
+    <div id="container">
+        <div id="map"></div>
+        <div id="directionsPanel" style="display: none;"></div>
+    </div>
+    <h1>Excel Data Viewer</h1>
+    <input type="file" id="upload" />
+    <br>
+    <table>
+        <tr>
+            <th>Locations</th>
+            <th>Driver A</th>
+            <th>Driver B</th>
+            <th>Driver C</th>
+        </tr>
+        <tr>
+            <td>
+                <select id="selectSource" size="25" multiple="true"></select>
+            </td>
+            <td>
+                <select id="selectDriverA" size="10" multiple="true"></select>
+            </td>
+            <td>
+                <select id="selectDriverB" size="10" multiple="true"></select>
+            </td>
+            <td>
+                <select id="selectDriverC" size="10" multiple="true"></select>
+            </td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>
+                <input type="button" value="Move to Driver A" onclick="moveToDriverA()">
+            </td>
+            <td>
+                <input type="button" value="Move to Driver B" onclick="moveToDriverB()">
+            </td>
+            <td>
+                <input type="button" value="Move to Driver C" onclick="moveToDriverC()">
+            </td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>
+                <input type="button" value="Remove from Driver A" onclick="removeFromDriverA()">
+            </td>
+            <td>
+                <input type="button" value="Remove from Driver B" onclick="removeFromDriverB()">
+            </td>
+            <td>
+                <input type="button" value="Remove from Driver C" onclick="removeFromDriverC()">
+            </td>
+        </tr>
+    </table>
+
+    <script>
+      const startAddress = "4905 Alabama Rd #140, Roswell, GA 30075";
+      const addressArray = ["4905 Alabama Rd #140, Roswell, GA 30075"];
+      let sourceArray = [];
+      let driverAArray = [];
+      let driverBArray = [];
+      let driverCArray = [];
+      const orders = [];
+
+      function handleFile(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          // Get the sheet by index (3 in this case)
+          const sheetName = workbook.SheetNames[3];
+          const worksheet = workbook.Sheets[sheetName];
+
+          // Function to get the value of a specific cell
+          const getCellValue = (row, column) => {
+            const cellAddress = `${column}${row}`;
+            const cell = worksheet[cellAddress];
+            return cell ? cell.v : undefined;
+          };
+
+          let i = 2;
+          while (getCellValue(i, 'W') !== undefined) {
+            addressArray.push(getCellValue(i, 'W'));
+            orders.push({address: getCellValue(i,'W'), phoneNumber: getCellValue(i,'E'), name: getCellValue(i,'D')});
+            i++;
+          }
+          console.log(orders[0].name)
+          console.log("addressArray length: " + addressArray.length);
+          initMap();
+        };
+
+        reader.readAsArrayBuffer(file);
+      }
+
+      var map;
+      var directionsService;
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: { lat: 34.0675276, lng: -84.4292258 }, // Initial center of the map
+          zoom: 10
+        });
+        directionsService = new google.maps.DirectionsService();
+
+        calculateAndOptimizeRoute(addressArray);
+      }
+
+      function calculateAndOptimizeRoute(addressArray) {
+        var waypoints = addressArray.slice(1).map(function(location) {
+          return { location: location, stopover: true };
+        });
+
+        directionsService.route({
+          origin: startAddress,
+          destination: addressArray[0],
+          waypoints: waypoints,
+          optimizeWaypoints: true,
+          travelMode: google.maps.TravelMode.DRIVING
+        }, function(response, status) {
+          if (status === google.maps.DirectionsStatus.OK) {
+            var optimizedOrder = response.routes[0].waypoint_order;
+            var optimizedLocations = [addressArray[0]];
+            optimizedOrder.forEach(index => optimizedLocations.push(addressArray[index + 1]));
+            optimizedLocations.push(addressArray[0]);
+
+            geocodeAddressesAndDisplayMarkers(optimizedLocations);
+            populateSelectSource(optimizedLocations);
+          } else {
+            window.alert('Directions request failed due to ' + status);
+          }
+        });
+      }
+
+      function geocodeAddressesAndDisplayMarkers(addresses) {
+        var geocoder = new google.maps.Geocoder();
+
+        addresses.forEach((address, index) => {
+          geocoder.geocode({ 'address': address }, function(results, status) {
+            if (status === 'OK') {
+              createMarker(results[0].geometry.location, index);
+            } else {
+              alert('Geocode was not successful for the following reason: ' + status);
+            }
+          });
+        });
+      }
+
+      function createMarker(position, index) {
+        new google.maps.Marker({
+          position: position,
+          map: map,
+          label: String.fromCharCode('A'.charCodeAt(0) + index)
+        });
+      }
+
+      function populateSelectSource(addresses) {
+        sourceArray = addresses.slice(1, -1).map((address, i) => '(' + (String.fromCharCode(66 + i)) + ') ' + address);
+        updateSelectBox('selectSource', sourceArray);
+      }
+
+      function updateSelectBox(selectBoxId, dataArray) {
+        dataArray = selectSort(dataArray);
+        const selectBox = document.getElementById(selectBoxId);
+        selectBox.innerHTML = ''; // Clear previous options
+
+        dataArray.forEach(item => {
+          const listItem = document.createElement('option');
+          listItem.textContent = item;
+          selectBox.appendChild(listItem);
+        });
+
+        selectBox.size = Math.max(dataArray.length, 10); // Ensure a minimum size of 10
+      }
+
+      function moveToDriverA() {
+        moveToDriver('selectDriverA', driverAArray);
+      }
+
+      function moveToDriverB() {
+        moveToDriver('selectDriverB', driverBArray);
+      }
+
+      function moveToDriverC() {
+        moveToDriver('selectDriverC', driverCArray);
+      }
+
+      function removeFromDriverA() {
+        removeFromDriver('selectDriverA', driverAArray);
+      }
+
+      function removeFromDriverB() {
+        removeFromDriver('selectDriverB', driverBArray);
+      }
+
+      function removeFromDriverC() {
+        removeFromDriver('selectDriverC', driverCArray);
+      }
+
+      function moveToDriver(driverSelectId, driverArray) {
+        const sourceSelect = document.getElementById('selectSource');
+
+        const selectedOptions = Array.from(sourceSelect.selectedOptions);
+        selectedOptions.forEach(option => {
+          sourceArray.splice(sourceArray.indexOf(option.textContent), 1);
+          driverArray.push(option.textContent);
+        });
+
+        updateSelectBox('selectSource', sourceArray);
+        updateSelectBox(driverSelectId, driverArray);
+      }
+
+      function removeFromDriver(driverSelectId, driverArray) {
+        const driverSelectBox = document.getElementById(driverSelectId);
+
+        const selectedOptions = Array.from(driverSelectBox.selectedOptions);
+        selectedOptions.forEach(option => {
+          driverArray.splice(driverArray.indexOf(option.textContent), 1);
+          sourceArray.push(option.textContent);
+        });
+
+        updateSelectBox(driverSelectId, driverArray);
+        updateSelectBox('selectSource', sourceArray);
+      }
+
+      function selectSort(array) {
+        return array.sort((a, b) => a.localeCompare(b));
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('upload').addEventListener('change', handleFile, false);
+      });
+    </script>
+</body>
+</html>
