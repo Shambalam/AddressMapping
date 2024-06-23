@@ -71,198 +71,210 @@
     </table>
 
     <script>
-      const order = {
-                name: "",
-                phoneNumber: "",
-                address: ""
-      };
+      
       const startAddress = "4905 Alabama Rd #140, Roswell, GA 30075";
-      const addressArray = ["4905 Alabama Rd #140, Roswell, GA 30075"];
-      let sourceArray = [];
-      let driverAArray = [];
-      let driverBArray = [];
-      let driverCArray = [];
-      const orders = [];
+let sourceArray = [];
+let driverAArray = [];
+let driverBArray = [];
+let driverCArray = [];
+const orders = [];
 
+function createOrder(name, phoneNumber, address) {
 
-      function createOrder(name, phoneNumber, address)
-      {
-        this.name = name;
-        this.phoneNumber = phoneNumber;
-        this.address = address;
-      }
+  if(name.localeCompare(phoneNumber) == 0)
+  {
+    this.name = "NO NAME";
+  }
+  else{
+    this.name = name;
+  }
+    
+    this.phoneNumber = phoneNumber;
+    this.address = address;
+}
 
-      function handleFile(event) {
-        const file = event.target.files[0];
-        const reader = new FileReader();
+function handleFile(event) {
+    const file = event.target.files[0];
+    const reader = new FileReader();
 
-        reader.onload = function(e) {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
 
-          // Get the sheet by index (3 in this case)
-          const sheetName = workbook.SheetNames[3];
-          const worksheet = workbook.Sheets[sheetName];
+        // Get the sheet by index (3 in this case)
+        const sheetName = workbook.SheetNames[3];
+        const worksheet = workbook.Sheets[sheetName];
 
-          // Function to get the value of a specific cell
-          const getCellValue = (row, column) => {
+        // Function to get the value of a specific cell
+        const getCellValue = (row, column) => {
             const cellAddress = `${column}${row}`;
             const cell = worksheet[cellAddress];
             return cell ? cell.v : undefined;
-          };
-
-          let i = 2;
-          while (getCellValue(i, 'W') !== undefined) {
-            addressArray.push(getCellValue(i, 'W'));
-            orders.push(new createOrder(getCellValue(i,'D'),getCellValue(i,'E'),getCellValue(i,'W')));
-            //orders.push({address: , phoneNumber: , name: });
-            i++;
-          }
-          console.log(orders[0].name)
-          console.log("addressArray length: " + addressArray.length);
-          initMap();
         };
 
-        reader.readAsArrayBuffer(file);
-      }
+        // Add the start address as the first order
+        orders.push(new createOrder("Start", "", startAddress));
 
-      var map;
-      var directionsService;
+        let i = 2;
+        while (getCellValue(i, 'W') !== undefined) {
+            const newOrder = new createOrder(getCellValue(i, 'D'), getCellValue(i, 'E'), getCellValue(i, 'W'));
+            orders.push(newOrder);
+            i++;
+        }
 
-      function initMap() {
-        map = new google.maps.Map(document.getElementById('map'), {
-          center: { lat: 34.0675276, lng: -84.4292258 }, // Initial center of the map
-          zoom: 10
-        });
-        directionsService = new google.maps.DirectionsService();
+        console.log(orders[0].name);
+        console.log("orders length: " + orders.length);
+        initMap();
+    };
 
-        calculateAndOptimizeRoute(addressArray);
-      }
+    reader.readAsArrayBuffer(file);
+}
 
-      function calculateAndOptimizeRoute(addressArray) {
-        var waypoints = addressArray.slice(1).map(function(location) {
-          return { location: location, stopover: true };
-        });
+var map;
+var directionsService;
 
-        directionsService.route({
-          origin: startAddress,
-          destination: addressArray[0],
-          waypoints: waypoints,
-          optimizeWaypoints: true,
-          travelMode: google.maps.TravelMode.DRIVING
-        }, function(response, status) {
-          if (status === google.maps.DirectionsStatus.OK) {
+function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 34.0675276, lng: -84.4292258 }, // Initial center of the map
+        zoom: 10
+    });
+    directionsService = new google.maps.DirectionsService();
+
+    calculateAndOptimizeRoute(orders);
+}
+
+function calculateAndOptimizeRoute(orders) {
+    var waypoints = orders.slice(1).map(function(order) {
+        return { location: order.address, stopover: true };
+    });
+
+    directionsService.route({
+        origin: startAddress,
+        destination: startAddress,
+        waypoints: waypoints,
+        optimizeWaypoints: true,
+        travelMode: google.maps.TravelMode.DRIVING
+    }, function(response, status) {
+        if (status === google.maps.DirectionsStatus.OK) {
             var optimizedOrder = response.routes[0].waypoint_order;
-            var optimizedLocations = [addressArray[0]];
-            optimizedOrder.forEach(index => optimizedLocations.push(addressArray[index + 1]));
-            optimizedLocations.push(addressArray[0]);
+            var optimizedOrders = [orders[0]];
+            optimizedOrder.forEach(index => optimizedOrders.push(orders[index + 1]));
+            optimizedOrders.push(orders[0]);
 
-            geocodeAddressesAndDisplayMarkers(optimizedLocations);
-            populateSelectSource(optimizedLocations);
-          } else {
+            geocodeAddressesAndDisplayMarkers(optimizedOrders);
+            populateSelectSource(optimizedOrders);
+
+            // Update the global orders array to reflect the optimized order
+            orders.length = 0; // Clear the current orders array
+            optimizedOrders.forEach(order => orders.push(order)); // Populate with optimized orders
+        } else {
             window.alert('Directions request failed due to ' + status);
-          }
-        });
-      }
+        }
+    });
+}
 
-      function geocodeAddressesAndDisplayMarkers(addresses) {
-        var geocoder = new google.maps.Geocoder();
+function geocodeAddressesAndDisplayMarkers(orders) {
+    var geocoder = new google.maps.Geocoder();
 
-        addresses.forEach((address, index) => {
-          geocoder.geocode({ 'address': address }, function(results, status) {
+    orders.forEach((order, index) => {
+        geocoder.geocode({ 'address': order.address }, function(results, status) {
             if (status === 'OK') {
-              createMarker(results[0].geometry.location, index);
+                createMarker(results[0].geometry.location, index);
             } else {
-              alert('Geocode was not successful for the following reason: ' + status);
+                alert('Geocode was not successful for the following reason: ' + status);
             }
-          });
         });
-      }
+    });
+}
 
-      function createMarker(position, index) {
-        new google.maps.Marker({
-          position: position,
-          map: map,
-          label: String.fromCharCode('A'.charCodeAt(0) + index)
-        });
-      }
+function createMarker(position, index) {
+    new google.maps.Marker({
+        position: position,
+        map: map,
+        label: String.fromCharCode('A'.charCodeAt(0) + index)
+    });
+}
 
-      function populateSelectSource(addresses) {
-        sourceArray = addresses.slice(1, -1).map((address, i) => '(' + (String.fromCharCode(66 + i)) + ') ' + address);
-        updateSelectBox('selectSource', sourceArray);
-      }
+function populateSelectSource(orders) {
+    sourceArray = orders.slice(1, -1).map((order, i) => '(' + (String.fromCharCode(66 + i)) + ') ' + order.name + ': ' + order.address + ', '+order.phoneNumber);
+    updateSelectBox('selectSource', sourceArray);
+}
 
-      function updateSelectBox(selectBoxId, dataArray) {
-        dataArray = selectSort(dataArray);
-        const selectBox = document.getElementById(selectBoxId);
-        selectBox.innerHTML = ''; // Clear previous options
+function updateSelectBox(selectBoxId, dataArray) {
+    dataArray = selectSort(dataArray);
+    const selectBox = document.getElementById(selectBoxId);
+    selectBox.innerHTML = ''; // Clear previous options
 
-        dataArray.forEach(item => {
-          const listItem = document.createElement('option');
-          listItem.textContent = item;
-          selectBox.appendChild(listItem);
-        });
+    dataArray.forEach(item => {
+        const listItem = document.createElement('option');
+        listItem.textContent = item;
+        selectBox.appendChild(listItem);
+    });
 
-        selectBox.size = Math.max(dataArray.length, 10); // Ensure a minimum size of 10
-      }
+    selectBox.size = Math.max(dataArray.length, 10); // Ensure a minimum size of 10
+}
 
-      function moveToDriverA() {
-        moveToDriver('selectDriverA', driverAArray);
-      }
+function moveToDriverA() {
+    moveToDriver('selectDriverA', driverAArray);
+}
 
-      function moveToDriverB() {
-        moveToDriver('selectDriverB', driverBArray);
-      }
+function moveToDriverB() {
+    moveToDriver('selectDriverB', driverBArray);
+}
 
-      function moveToDriverC() {
-        moveToDriver('selectDriverC', driverCArray);
-      }
+function moveToDriverC() {
+    moveToDriver('selectDriverC', driverCArray);
+}
 
-      function removeFromDriverA() {
-        removeFromDriver('selectDriverA', driverAArray);
-      }
+function removeFromDriverA() {
+    removeFromDriver('selectDriverA', driverAArray);
+}
 
-      function removeFromDriverB() {
-        removeFromDriver('selectDriverB', driverBArray);
-      }
+function removeFromDriverB() {
+    removeFromDriver('selectDriverB', driverBArray);
+}
 
-      function removeFromDriverC() {
-        removeFromDriver('selectDriverC', driverCArray);
-      }
+function removeFromDriverC() {
+    removeFromDriver('selectDriverC', driverCArray);
+}
 
-      function moveToDriver(driverSelectId, driverArray) {
-        const sourceSelect = document.getElementById('selectSource');
+function moveToDriver(driverSelectId, driverArray) {
+    const sourceSelect = document.getElementById('selectSource');
 
-        const selectedOptions = Array.from(sourceSelect.selectedOptions);
-        selectedOptions.forEach(option => {
-          sourceArray.splice(sourceArray.indexOf(option.textContent), 1);
-          driverArray.push(option.textContent);
-        });
+    const selectedOptions = Array.from(sourceSelect.selectedOptions);
+    selectedOptions.forEach(option => {
+        sourceArray.splice(sourceArray.indexOf(option.textContent), 1);
+        driverArray.push(option.textContent);
+    });
 
-        updateSelectBox('selectSource', sourceArray);
-        updateSelectBox(driverSelectId, driverArray);
-      }
+    updateSelectBox('selectSource', sourceArray);
+    updateSelectBox(driverSelectId, driverArray);
+}
 
-      function removeFromDriver(driverSelectId, driverArray) {
-        const driverSelectBox = document.getElementById(driverSelectId);
+function removeFromDriver(driverSelectId, driverArray) {
+    const driverSelectBox = document.getElementById(driverSelectId);
 
-        const selectedOptions = Array.from(driverSelectBox.selectedOptions);
-        selectedOptions.forEach(option => {
-          driverArray.splice(driverArray.indexOf(option.textContent), 1);
-          sourceArray.push(option.textContent);
-        });
+    const selectedOptions = Array.from(driverSelectBox.selectedOptions);
+    selectedOptions.forEach(option => {
+        driverArray.splice(driverArray.indexOf(option.textContent), 1);
+        sourceArray.push(option.textContent);
+    });
 
-        updateSelectBox(driverSelectId, driverArray);
-        updateSelectBox('selectSource', sourceArray);
-      }
+    updateSelectBox(driverSelectId, driverArray);
+    updateSelectBox('selectSource', sourceArray);
+}
 
-      function selectSort(array) {
-        return array.sort((a, b) => a.localeCompare(b));
-      }
+function selectSort(array) {
+    return array.sort((a, b) => a.localeCompare(b));
+}
 
-      document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('upload').addEventListener('change', handleFile, false);
-      });
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('upload').addEventListener('change', handleFile, false);
+});
+
+
+console.log(order[0].address);
+console.log(addresses)
     </script>
 </body>
 </html>
