@@ -71,6 +71,11 @@
     </table>
 
     <script>
+      const order = {
+                name: "",
+                phoneNumber: "",
+                address: ""
+      };
       const startAddress = "4905 Alabama Rd #140, Roswell, GA 30075";
       const addressArray = ["4905 Alabama Rd #140, Roswell, GA 30075"];
       let sourceArray = [];
@@ -78,6 +83,14 @@
       let driverBArray = [];
       let driverCArray = [];
       const orders = [];
+
+
+      function createOrder(name, phoneNumber, address)
+      {
+        this.name = name;
+        this.phoneNumber = phoneNumber;
+        this.address = address;
+      }
 
       function handleFile(event) {
         const file = event.target.files[0];
@@ -101,7 +114,8 @@
           let i = 2;
           while (getCellValue(i, 'W') !== undefined) {
             addressArray.push(getCellValue(i, 'W'));
-            orders.push({address: getCellValue(i,'W'), phoneNumber: getCellValue(i,'E'), name: getCellValue(i,'D')});
+            orders.push(new createOrder(getCellValue(i,'D'),getCellValue(i,'E'),getCellValue(i,'W')));
+            //orders.push({address: , phoneNumber: , name: });
             i++;
           }
           console.log(orders[0].name)
